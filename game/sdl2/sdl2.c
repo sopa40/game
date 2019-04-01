@@ -36,69 +36,117 @@ static const int WINDOW_HEIGHT = CONFIG_WINDOW_HEIGHT;
 /* Handles events
  * returns -1 for quit event
  */
-static int event_handler(const SDL_Event *const ev)
+
+
+
+
+typedef struct
 {
-	if (ev->type == SDL_QUIT) {
-		return (-1);
-	}
+    int x, y;
+    short life;
+    char *name;
+} Man;
 
-	switch (ev->type) {
-	case SDL_KEYDOWN:
-		/* ev is a union, member SDL_KeyboardEvent key is only activated
-		 * if some keyboard event did happen.
-		 * key has member keysym.scancode which describes the physical
-		 * key that was pressed
-		 */
-		SDL_Log("SDL_KeyboardEvent:KEYDOWN: %s\n",
-				SDL_GetScancodeName(ev->key.keysym.scancode));
-		break;
-	default:
-		break;
-	}
+void render(SDL_Renderer *renderer, Man *man)
+{
+    SDL_SetRenderDrawColor(renderer, 0, 0 ,255, 255);
 
-	return (0);
+    SDL_RenderClear(renderer);
+
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+
+    SDL_Rect rect = { man->x, man->y, 200, 200 };
+    SDL_RenderFillRect(renderer, &rect);
+
+    SDL_RenderPresent(renderer);
 }
 
-int main(void)
+int processEvents(SDL_Window *window, Man *man)
 {
-	int exit_code = 0;
+    SDL_Event event;
+    int done = 0;
 
-	/* log pid */
-	pid_t pid = getpid();
-	fprintf(stderr, PROGNAME": pid = %"PRIdMAX"\n", (intmax_t) pid);
+    while(SDL_PollEvent(&event)){
+        switch(event.type)
+        {
+            case SDL_WINDOWEVENT_CLOSE:
+            {
+                if(window){
+                    SDL_DestroyWindow(window);
+                    window = NULL;
+                    done = 1;
+                }
+            }
+            break;
+            case SDL_KEYDOWN:
+            {
+                switch(event.key.keysym.sym)
+                {
+                    case SDLK_ESCAPE:
+                        done = 1;
+                    break;
+                    case SDLK_RIGHT:
+                        man->x += 10;
+                    break;
+                    case SDLK_LEFT:
+                        man->x += -10;
+                    break;
+                    case SDLK_DOWN:
+                        man->y += +10;
+                    break;
+                    case SDLK_UP:
+                        man->y += -10;
+                    break;
+                }
+                break;
+                case SDL_QUIT:
+                    done = 1;
+                break;
+            }
+        }
+    }
 
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) == -1) {
-		fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
-		exit_code = 1;
-		goto exit_main;
-	}
+    return done;
+}
 
-	SDL_Window *window;
-	SDL_Renderer *renderer;
-	if (SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT, 0, &window, &renderer)) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateWindowAndRenderer: %s",
-				SDL_GetError());
-		exit_code = 1;
-		goto quit_sdl;
-	}
+int main(int argc, char *argv[])
+{
+    SDL_Window *window;
+    SDL_Renderer *renderer;
 
-	while (true) {
-		SDL_RenderClear(renderer);
-		SDL_RenderPresent(renderer);
+    SDL_Init(SDL_INIT_VIDEO);
 
-		SDL_Event ev;
-		SDL_WaitEventTimeout(&ev, POLL_RATE_MS);
-		if (event_handler(&ev) == -1) {
-			SDL_Log(PROGNAME": Ending program");
-			goto destroy_window_renderer;
-		}
-	}
+    Man man;
+    man.x = 220;
+    man.y = 140;
 
-destroy_window_renderer:
-    SDL_DestroyRenderer(renderer);
+    window = SDL_CreateWindow("Game Window",
+                              SDL_WINDOWPOS_UNDEFINED,
+                              SDL_WINDOWPOS_UNDEFINED,
+                              640,
+                              480,
+                              0
+                              );
+
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+
+    int done = 0;
+
+    while(!done){
+        done = processEvents(window, &man);
+
+        render(renderer,&man);
+
+        SDL_Delay(100);
+
+    }
+
+
     SDL_DestroyWindow(window);
-quit_sdl:
-	SDL_Quit();
-exit_main:
-	return (exit_code);
+    SDL_DestroyRenderer(renderer);
+
+    SDL_Quit();
+    return 0;
 }
+
+

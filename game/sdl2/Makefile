@@ -20,9 +20,7 @@ WARNINGS=-Wall \
          -Wstrict-prototypes \
          -Wmissing-prototypes \
          -Wstrict-aliasing \
-         -Wold-style-definition \
-         -Wnull-dereference \
-         -Wduplicated-cond
+         -Wold-style-definition
 
 # C11, don't use builtin functions
 CFLAGS=-std=c11 -fno-builtin
