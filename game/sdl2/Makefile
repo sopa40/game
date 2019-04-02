@@ -1,4 +1,5 @@
 # Many more warnings, not all "good"
+SDL2=$(HOME)/.local
 WARNINGS=-Wall \
          -Wextra \
          -pedantic \
@@ -20,14 +21,16 @@ WARNINGS=-Wall \
          -Wstrict-prototypes \
          -Wmissing-prototypes \
          -Wstrict-aliasing \
-         -Wold-style-definition
+         -Wold-style-definition \
+         -Wnull-dereference \
+         -Wduplicated-cond
 
 # C11, don't use builtin functions
 CFLAGS=-std=c11 -fno-builtin
 # Generate dependency files
-CPPFLAGS=$(WARNINGS) -MMD -MF $*.d
+CPPFLAGS=$(WARNINGS) -isystem$(SDL2)/include -MMD -MF $*.d
 # Link with SDL2
-LDLIBS=-lSDL2
+LDLIBS=-L$(SDL2)/lib -lSDL2 -lSDL2_image -Wl,-rpath,$(SDL2)/lib
 
 # if not called with `make DEBUG=` compile in debug mode
 DEBUG ?= y
