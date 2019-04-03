@@ -13,178 +13,430 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 
 
 /* Configurable items */
-#define CONFIG_PROGNAME sdl2_test
-#define CONFIG_POLL_RATE_MS (5)
-#define CONFIG_WINDOW_WIDTH 800
-#define CONFIG_WINDOW_HEIGHT 600
+#define CONFIG_POLL_RATE_MS  (5)
+#define CONFIG_WINDOW_WIDTH  640
+#define CONFIG_WINDOW_HEIGHT 480
+#define CONFIG_HERO_HEIGHT 40
+#define CONFIG_HERO_WIDTH  40
+#define CONFIG_HERO_STEP   10
+#define CONFIG_BARS_AMOUNT 10
+#define CONFIG_BAR_WIDTH   80
+#define CONFIG_BAR_HEIGHT  40
+#define CONFIG_STARS_AMOUT 1
+#define CONFIG_GRAVITY 0.5
+
 /* ----------------- */
-
-/* utility macros */
-#define xstr(s) str(s)
-#define str(s) #s
-#define max(a, b) ((a) > (b) ? (a) : (b))
-#define min(a, b) ((a) <= (b) ? (a) : (b))
-
-/* Global constants, typed for non-strings, macros for some strings to use compile-time concat
-#define PROGNAME xstr(CONFIG_PROGNAME)
-static const int POLL_RATE_MS = CONFIG_POLL_RATE_MS;
-static const int WINDOW_WIDTH = CONFIG_WINDOW_WIDTH;
-static const int WINDOW_HEIGHT = CONFIG_WINDOW_HEIGHT; */
-
-/* Global variables, shouldn't be many */
-
-/* Handles events
- * returns -1 for quit event
- */
-
-
-
 typedef struct
 {
-    int x, y;
-    short life;
-    char *name;
+  double x, y;
+  double dx, dy;
+  short life;
+  char *name;
+  int onBar;
+
+  int animFrame, facingLeft, slowingDown;
 } Man;
 
 typedef struct
 {
-    int x, y;
+  int x, y;
 } Star;
 
 typedef struct
 {
+  int x, y, w, h;
+} Bar;
 
-    Man man;
-    Star stars[10];
-    SDL_Texture *star;
-    SDL_Renderer *renderer;
+typedef struct
+{
+  //Players
+  Man hero;
 
-} Gamestate;
+  //Stars
+  Star stars[100];
 
-void loadGame(Gamestate *game){
-    SDL_Surface *starSurface = NULL;
-    starSurface = IMG_Load("star.png");
-    if(starSurface == NULL){
-        printf("Can not find star.png!\n");
-        SDL_Quit();
-        exit(1);
-    }
-    game->star = SDL_CreateTextureFromSurface(game->renderer, starSurface);
-    SDL_FreeSurface(starSurface);
-    game->man.x = 220;
-    game->man.y = 140;
+  //Bars
+  Bar ledges[100];
 
-    for(int i = 0; i < 10; i++){
-        game->stars[i].x = random()%640;
-        game->stars[i].y = random()%480;
-    }
+  //Images
+  SDL_Texture *star;
+  SDL_Texture *manFrames[2];
+  SDL_Texture *brick;
+
+  int time;
+
+  //Renderer
+  SDL_Renderer *renderer;
+} GameState;
+
+void loadGame(GameState *game);
+void contactHandle(GameState *game);
+void process(GameState *game);
+void render(SDL_Renderer *renderer, GameState *game);
+int processEvents(SDL_Window *window, GameState *game);
+
+void loadGame(GameState *game)
+{
+  SDL_Surface *surface = NULL;
+
+  //Load images and create rendering textures from them
+  surface = IMG_Load("star.png");
+  if(surface == NULL)
+  {
+    printf("Cannot find star.png %s\n", IMG_GetError());
+    SDL_Quit();
+    exit(1);
+  }
+
+  game->star = SDL_CreateTextureFromSurface(game->renderer, surface);
+  SDL_FreeSurface(surface);
+
+  surface = IMG_Load("hero.png");
+  if(surface == NULL)
+  {
+    printf("Cannot find hero.png: %s\n", IMG_GetError());
+    SDL_Quit();
+    exit(1);
+  }
+  game->manFrames[0] = SDL_CreateTextureFromSurface(game->renderer, surface);
+  SDL_FreeSurface(surface);
+
+  surface = IMG_Load("hero_m.png");
+  if(surface == NULL)
+  {
+    printf("Cannot find hero_m.png: %s\n", IMG_GetError());
+    SDL_Quit();
+    exit(1);
+  }
+  game->manFrames[1] = SDL_CreateTextureFromSurface(game->renderer, surface);
+  SDL_FreeSurface(surface);
+
+  surface = IMG_Load("brick.png");
+  if(surface == NULL)
+  {
+    printf("Cannot find brick.png: %s\n", IMG_GetError());
+    SDL_Quit();
+    exit(1);
+  }
+  game->brick = SDL_CreateTextureFromSurface(game->renderer, surface);
+  SDL_FreeSurface(surface);
+
+  game->hero.x = 320-40;
+  game->hero.y = 240-40;
+  game->hero.dx = 0;
+  game->hero.dy = 0;
+  game->hero.onBar = 0;
+  game->hero.animFrame = 0;
+  game->hero.facingLeft = 1;
+  game->hero.slowingDown = 0;
+
+  game->time = 0;
+
+  //init stars
+ /* for(int i = 0; i < 100; i++)
+  {
+    game->stars[i].x = random()%640;
+    game->stars[i].y = random()%480;
+  }*/
+
+  //init ledges
+  for(int i = 0; i < 100; i++)
+  {
+    game->ledges[i].w = 256;
+    game->ledges[i].h = 64;
+    game->ledges[i].x = i*256;
+    game->ledges[i].y = 400;
+  }
+  game->ledges[99].x = 350;
+  game->ledges[99].y = 200;
+
+  game->ledges[98].x = 350;
+  game->ledges[98].y = 350;
 }
 
-void render(SDL_Renderer *renderer, Gamestate *game)
+//useful utility function to see if two rectangles are colliding at all
+int collide2d(double x1, double y1, double x2, double y2, double wt1, double ht1, double wt2, double ht2)
 {
-    SDL_SetRenderDrawColor(renderer, 0, 0 ,255, 255);
-
-    SDL_RenderClear(renderer);
-
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-
-    SDL_Rect rect = { game->man.x, game->man.y, 100, 100 };
-    SDL_RenderFillRect(renderer, &rect);
-
-
-    for(int i = 0; i < 10; i++){
-        SDL_Rect starRect = { game->stars[i].x, game->stars[i].y, 64, 64};
-        SDL_RenderCopy(renderer, game->star, NULL, &starRect);
-
-    }
-    SDL_RenderPresent(renderer);
-
+  return (!((x1 > (x2+wt2)) || (x2 > (x1+wt1)) || (y1 > (y2+ht2)) || (y2 > (y1+ht1))));
 }
 
-int processEvents(SDL_Window *window, Gamestate *game)
+void process(GameState *game)
 {
-    SDL_Event event;
-    int done = 0;
+  //add time
+  game->time++;
 
-    while(SDL_PollEvent(&event)){
-        switch(event.type)
+  //hero movement
+  Man *hero = &game->hero;
+  hero->x += hero->dx;
+  hero->y += hero->dy;
+
+  if(hero->dx != 0 && hero->onBar && !hero->slowingDown)
+  {
+    if(game->time % 8 == 0)
+    {
+      if(hero->animFrame == 0)
+      {
+        hero->animFrame = 1;
+      }
+      else
+      {
+        hero->animFrame = 0;
+      }
+    }
+  }
+
+  hero->dy += CONFIG_GRAVITY;
+}
+
+void collisionDetect(GameState *game)
+{
+  //Check for collision with any ledges (brick blocks)
+  for(int i = 0; i < 100; i++)
+  {
+    double mw = 48, mh = 48;
+    double mx = game->hero.x, my = game->hero.y;
+    double bx = game->ledges[i].x, by = game->ledges[i].y, bw = game->ledges[i].w, bh = game->ledges[i].h;
+
+    if(mx+mw/2 > bx && mx+mw/2<bx+bw)
+    {
+      //are we bumping our head?
+      if(my < by+bh && my > by && game->hero.dy < 0)
+      {
+        //correct y
+        game->hero.y = by+bh;
+        my = by+bh;
+
+        //bumped our head, stop any jump velocity
+        game->hero.dy = 0;
+        game->hero.onBar = 1;
+      }
+    }
+    if(mx+mw > bx && mx<bx+bw)
+    {
+      //are we landing on the ledge
+      if(my+mh > by && my < by && game->hero.dy > 0)
+      {
+        //correct y
+        game->hero.y = by-mh;
+        my = by-mh;
+
+        //landed on this ledge, stop any jump velocity
+        game->hero.dy = 0;
+        game->hero.onBar = 1;
+      }
+    }
+
+    if(my+mh > by && my<by+bh)
+    {
+      //rubbing against right edge
+      if(mx < bx+bw && mx+mw > bx+bw && game->hero.dx < 0)
+      {
+        //correct x
+        game->hero.x = bx+bw;
+        mx = bx+bw;
+
+        game->hero.dx = 0;
+      }
+      //rubbing against left edge
+      else if(mx+mw > bx && mx < bx && game->hero.dx > 0)
+      {
+        //correct x
+        game->hero.x = bx-mw;
+        mx = bx-mw;
+
+        game->hero.dx = 0;
+      }
+    }
+  }
+}
+
+int processEvents(SDL_Window *window, GameState *game)
+{
+  SDL_Event event;
+  int done = 0;
+
+  while(SDL_PollEvent(&event))
+  {
+    switch(event.type)
+    {
+      case SDL_WINDOWEVENT_CLOSE:
+      {
+        if(window)
         {
-            case SDL_WINDOWEVENT_CLOSE:
-            {
-                if(window){
-                    SDL_DestroyWindow(window);
-                    window = NULL;
-                    done = 1;
-                }
-            }
-            break;
-            case SDL_KEYDOWN:
-            {
-                switch(event.key.keysym.sym)
-                {
-                    case SDLK_ESCAPE:
-                        done = 1;
-                    break;
-                }
-                break;
-                case SDL_QUIT:
-                    done = 1;
-                break;
-            }
+          SDL_DestroyWindow(window);
+          window = NULL;
+          done = 1;
         }
+      }
+      break;
+      case SDL_KEYDOWN:
+      {
+        switch(event.key.keysym.sym)
+        {
+          case SDLK_ESCAPE:
+            done = 1;
+          break;
+          case SDLK_UP:
+            if(game->hero.onBar)
+            {
+              game->hero.dy = -8;
+              game->hero.onBar = 0;
+            }
+          break;
+        }
+      }
+      break;
+      case SDL_QUIT:
+        //quit out of the game
+        done = 1;
+      break;
     }
-    const Uint8 *state = SDL_GetKeyboardState(NULL);
-    if(state[SDL_SCANCODE_LEFT])
-        game->man.x -= 10;
-    if(state[SDL_SCANCODE_RIGHT])
-        game->man.x += 10;
-    if(state[SDL_SCANCODE_DOWN])
-        game->man.y += 10;
-    if(state[SDL_SCANCODE_UP])
-        game->man.y -= 10;
-    return done;
+  }
+
+  //More jumping
+  const Uint8 *state = SDL_GetKeyboardState(NULL);
+  if(state[SDL_SCANCODE_UP])
+  {
+    game->hero.dy -= 0.2f;
+  }
+
+  //Walking
+  if(state[SDL_SCANCODE_LEFT])
+  {
+    game->hero.dx -= 0.5;
+    if(game->hero.dx < -6)
+    {
+      game->hero.dx = -6;
+    }
+    game->hero.facingLeft = 1;
+    game->hero.slowingDown = 0;
+  }
+  else if(state[SDL_SCANCODE_RIGHT])
+  {
+    game->hero.dx += 0.5;
+    if(game->hero.dx > 6)
+    {
+      game->hero.dx = 6;
+    }
+    game->hero.facingLeft = 0;
+    game->hero.slowingDown = 0;
+  }
+  else
+  {
+    game->hero.animFrame = 0;
+    game->hero.dx *= 0.8f;
+    game->hero.slowingDown = 1;
+    if(fabsf(game->hero.dx) < 0.1f)
+    {
+      game->hero.dx = 0;
+    }
+  }
+
+//  if(state[SDL_SCANCODE_UP])
+//  {
+//    game->hero.y -= 10;
+//  }
+//  if(state[SDL_SCANCODE_DOWN])
+//  {
+//    game->hero.y += 10;
+//  }
+
+  return done;
+}
+
+void doRender(SDL_Renderer *renderer, GameState *game)
+{
+  //set the drawing color to blue
+  SDL_SetRenderDrawColor(renderer, 128, 128, 255, 255);
+
+  //Clear the screen (to blue)
+  SDL_RenderClear(renderer);
+
+  //set the drawing color to white
+  SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+
+  for(int i = 0; i < 100; i++)
+  {
+    SDL_Rect ledgeRect = { game->ledges[i].x, game->ledges[i].y, game->ledges[i].w, game->ledges[i].h };
+    SDL_RenderCopy(renderer, game->brick, NULL, &ledgeRect);
+  }
+
+  //draw a rectangle at hero's position
+  SDL_Rect rect = { game->hero.x, game->hero.y, 48, 48 };
+  SDL_RenderCopyEx(renderer, game->manFrames[game->hero.animFrame],
+                   NULL, &rect, 0, NULL, (game->hero.facingLeft == 0));
+
+  //draw the star image
+//  for(int i = 0; i < 100; i++)
+//  {
+//    SDL_Rect starRect = { game->stars[i].x, game->stars[i].y, 64, 64 };
+//    SDL_RenderCopy(renderer, game->star, NULL, &starRect);
+//  }
+
+
+  //We are done drawing, "present" or show to the screen what we've drawn
+  SDL_RenderPresent(renderer);
 }
 
 int main(void)
 {
-    Gamestate game;
-    SDL_Window *window;
-    SDL_Renderer *renderer;
+  GameState game;
+  SDL_Window *window = NULL;                    // Declare a window
+  SDL_Renderer *renderer = NULL;                // Declare a renderer
 
-    SDL_Init(SDL_INIT_VIDEO);
-    srandom((int)time(NULL));
+  SDL_Init(SDL_INIT_VIDEO);              // Initialize SDL2
 
-    window = SDL_CreateWindow("Game Window",
-                              SDL_WINDOWPOS_UNDEFINED,
-                              SDL_WINDOWPOS_UNDEFINED,
-                              640,
-                              480,
-                              0
-                              );
+ // srandom((int)time(NULL));
+
+  //Create an application window with the following settings:
+  window = SDL_CreateWindow("Game Window",                     // window title
+                            SDL_WINDOWPOS_UNDEFINED,           // initial x position
+                            SDL_WINDOWPOS_UNDEFINED,           // initial y position
+                            CONFIG_WINDOW_WIDTH,                               // width, in pixels
+                            CONFIG_WINDOW_HEIGHT,                               // height, in pixels
+                            0                                  // flags
+                            );
+  renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+  game.renderer = renderer;
+
+  loadGame(&game);
+
+  // The window is open: enter program loop (see SDL_PollEvent)
+  int done = 0;
+
+  //Event loop
+  while(!done)
+  {
+    //Check for events
+    done = processEvents(window, &game);
+
+    process(&game);
+    collisionDetect(&game);
+
+    //Render display
+    doRender(renderer, &game);
+
+    //don't burn up the CPU
+    //SDL_Delay(10);
+  }
 
 
+  //Shutdown game and unload all memory
+  SDL_DestroyTexture(game.star);
+  SDL_DestroyTexture(game.manFrames[0]);
+  SDL_DestroyTexture(game.manFrames[1]);
+  SDL_DestroyTexture(game.brick);
 
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    game.renderer = renderer;
-    loadGame(&game);
+  // Close and destroy the window
+  SDL_DestroyWindow(window);
+  SDL_DestroyRenderer(renderer);
 
-    int done = 0;
-
-    while(!done){
-        done = processEvents(window, &game);
-        render(renderer,&game);
-        SDL_Delay(100);
-    }
-
-    SDL_DestroyTexture(game.star);
-    SDL_DestroyWindow(window);
-    SDL_DestroyRenderer(renderer);
-
-    SDL_Quit();
-    return 0;
+  // Clean up
+  SDL_Quit();
+  return 0;
 }
-
 

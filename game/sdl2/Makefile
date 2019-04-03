@@ -30,7 +30,7 @@ CFLAGS=-std=c11 -fno-builtin
 # Generate dependency files
 CPPFLAGS=$(WARNINGS) -isystem$(SDL2)/include -MMD -MF $*.d
 # Link with SDL2
-LDLIBS=-L$(SDL2)/lib -lSDL2 -lSDL2_image -Wl,-rpath,$(SDL2)/lib
+LDLIBS=-L$(SDL2)/lib -lSDL2 -lSDL2_image -Wl,-rpath,$(SDL2)/lib -lm
 
 # if not called with `make DEBUG=` compile in debug mode
 DEBUG ?= y
