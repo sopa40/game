@@ -23,7 +23,8 @@ WARNINGS=-Wall \
          -Wstrict-aliasing \
          -Wold-style-definition \
          -Wnull-dereference \
-         -Wduplicated-cond
+         -Wduplicated-cond \
+         -Werror \
 
 # C11, don't use builtin functions
 CFLAGS=-std=c11 -fno-builtin

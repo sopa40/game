@@ -174,7 +174,7 @@ void process(GameState *game)
     Man *hero = &game->hero;
     hero->x += hero->dx;
     hero->y += hero->dy;
-    if(hero->dx != 0 && hero->onBar && !hero->slowingDown)
+    if (hero->onBar && !hero->slowingDown && (hero->dx > 0 || hero->dx < 0))
     {
         if(game->time % 8 == 0)
         {
