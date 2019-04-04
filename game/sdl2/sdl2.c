@@ -31,7 +31,18 @@
 #define CONFIG_STAR_HEIGHT  52
 #define CONFIG_GRAVITY 0.5
 
-/* ----------------- */
+/* TODO list
+    0. Add lives
+        0.1 add font lib
+        0.2 add game over screen
+        0.3 use lives counter *lives
+    1. Use name
+    2. Change moving of stars
+    3. Change bars' positions
+    4. Add levels (another obstacles, position of bar) or modes (without deathes, etc.)
+    5. Find better images (for hero especially)
+*/
+
 typedef struct vector {
     double x;
     double y;
