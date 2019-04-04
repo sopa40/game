@@ -30,8 +30,14 @@
 #define CONFIG_GRAVITY 0.5
 
 /* ----------------- */
+typedef struct vector {
+    double x;
+    double y;
+} vector_t;
+
 typedef struct {
-    double x, y;
+    vector_t pos;
+    int height, width;
     double dx, dy;
     short life;
     char *name;
@@ -120,10 +126,12 @@ void loadGame(GameState *game) {
     game->brick = SDL_CreateTextureFromSurface(game->renderer, surface);
     SDL_FreeSurface(surface);
 
-    game->hero.x = 320-40;
-    game->hero.y = 240-40;
+    game->hero.pos.x = 320-40;
+    game->hero.pos.y = 240-40;
     game->hero.dx = 0;
     game->hero.dy = 0;
+    game->hero.height = CONFIG_HERO_HEIGHT;
+    game->hero.width = CONFIG_HERO_WIDTH;
     game->hero.onBar = 0;
     game->hero.animFrame = 0;
     game->hero.facingLeft = 1;
@@ -165,8 +173,8 @@ void process(GameState *game) {
 
     //hero movement
     Man *hero = &game->hero;
-    hero->x += hero->dx;
-    hero->y += hero->dy;
+    hero->pos.x += hero->dx;
+    hero->pos.y += hero->dy;
     if (hero->onBar && !hero->slowingDown && (hero->dx > 0 || hero->dx < 0)) {
         if(game->time % 8 == 0) {
             if(hero->animFrame == 0)
@@ -180,57 +188,52 @@ void process(GameState *game) {
 }
 
 void contactHandle(GameState *game) {
+    double mw = game->hero.width, mh = game->hero.height;
     //Check for collision with any ledges (brick blocks)
     for (int i = 0; i < 100; i++) {
-        double mw = 48, mh = 48;
-        double mx = game->hero.x, my = game->hero.y;
+        vector_t *mpos = &game->hero.pos;
         double bx = game->ledges[i].x, by = game->ledges[i].y,
                bw = game->ledges[i].w, bh = game->ledges[i].h;
 
-        if (mx + mw/2 > bx && mx + mw/2 < bx + bw) {
+        if (mpos->x + mw/2 > bx && mpos->x + mw/2 < bx + bw) {
             //are we bumping our head?
-            if(my < by + bh && my > by && game->hero.dy < 0) {
+            if(mpos->y < by + bh && mpos->y > by && game->hero.dy < 0) {
                 //correct y
-                game->hero.y = by + bh;
-                my = by + bh;
+                mpos->y = by + bh;
 
                 //bumped our head, stop any jump velocity
                 game->hero.dy = 0;
                 game->hero.onBar = 1;
             }
         }
-        if (mx + mw > bx && mx < bx + bw) {
+        if (mpos->x + mw > bx && mpos->x < bx + bw) {
             //are we landing on the ledge
-            if(my + mh > by && my < by && game->hero.dy > 0) {
+            if(mpos->y + mh > by && mpos->y < by && game->hero.dy > 0) {
                 //correct y
-                game->hero.y = by - mh;
-                my = by - mh;
+                mpos->y = by - mh;
 
                 //landed on this ledge, stop any jump velocity
                 game->hero.dy = 0;
                 game->hero.onBar = 1;
-            }
+            } //       double mx = game->hero.x, my = game->hero.y;
         }
 
-        if(my + mh > by && my < by + bh) {
+        if(mpos->y + mh > by && mpos->y < by + bh) {
             //rubbing against right edge
-            if(mx < bx + bw && mx + mw > bx + bw && game->hero.dx < 0) {
+            if(mpos->x < bx + bw && mpos->x + mw > bx + bw && game->hero.dx < 0) {
                 //correct x
-                game->hero.x = bx + bw;
-                mx = bx + bw;
+                mpos->x = bx + bw;
 
                 game->hero.dx = 0;
             }
             //rubbing against left edge
-            else if(mx + mw > bx && mx < bx && game->hero.dx > 0) {
+            else if(mpos->x + mw > bx && mpos->x < bx && game->hero.dx > 0) {
                 //correct x
-                game->hero.x = bx - mw;
-                mx = bx - mw;
-
+                mpos->x = bx - mw;
                 game->hero.dx = 0;
             }
         }
-    }
+    } //       double mx = game->hero.x, my = game->hero.y;
 }
 
 int processEvents(SDL_Window *window, GameState *game) {
@@ -327,10 +330,10 @@ void render(SDL_Renderer *renderer, GameState *game) {
 
     //draw a rectangle at hero's position
     SDL_Rect rect = {
-        (int)game->hero.x,
-        (int)game->hero.y,
-        48,
-        48
+        (int)game->hero.pos.x,
+        (int)game->hero.pos.y,
+        game->hero.width,
+        game->hero.height
     };
     SDL_RenderCopyEx(renderer, game->manFrames[game->hero.animFrame],
                      NULL, &rect, 0, NULL, (game->hero.facingLeft == 0));
