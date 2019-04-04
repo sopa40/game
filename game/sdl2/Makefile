@@ -1,6 +1,10 @@
+SRC = sdl2.c
+BIN = sdl2
+CC = gcc
+OBJS = $(SRC:.c=.o)
 # Many more warnings, not all "good"
-SDL2=$(HOME)/.local
-WARNINGS=-Wall \
+WARNINGS = \
+         -Wall \
          -Wextra \
          -pedantic \
          -Wchkp \
@@ -26,54 +30,17 @@ WARNINGS=-Wall \
          -Wduplicated-cond \
          -Werror \
 
-# C11, don't use builtin functions
-CFLAGS=-std=c11 -fno-builtin
-# Generate dependency files
-CPPFLAGS=$(WARNINGS) -isystem$(SDL2)/include -MMD -MF $*.d
-# Link with SDL2
-LDLIBS=-L$(SDL2)/lib -lSDL2 -lSDL2_image -Wl,-rpath,$(SDL2)/lib -lm
+LDFLAGS = -Wl,-rpath=/usr/lib
+CFLAGS = $(WARNINGS) $(shell pkg-config --cflags sdl2 SDL2_image)
+LDLIBS =  $(shell pkg-config --libs sdl2 SDL2_image)
 
-# if not called with `make DEBUG=` compile in debug mode
-DEBUG ?= y
-ifeq ($(DEBUG), y)
-CFLAGS += -Og -g3
-else
-CPPFLAGS += -DNDEBUG -O3
-endif
+all: $(BIN)
 
-# Top-Level Rule
-all: sdl2
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# List of objects to build
-obj-y += sdl2.o
-# Append submodules to list, eg.:
-#     obj-y += mod1/module.o
-#     -include mod1/*.d
-# and then include that Makefile:
-#include mod1/objs.mk
+$(BIN): $(OBJS)
+	$(CC) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
-# Build program from object list
-tb: $(obj-y)
-
-# Manual GNU-style pattern-rule, equivalent to .c.o suffix rule
-%: %.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
-# Include generated dependency rules, ignore if not existing
--include *.d
-# Also recompile if dependency files have changed
-%.o: %.c %.d
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
-# If dependency files don't exist (first build), ignore (otherwise previous rule
-# would fail)
-%.d: ;
-
-# Remove final binary, objects and dependency files
 clean:
-	@$(RM) -v sdl2 $(obj-y) $(obj-y:.o=.d)
-
-# Don't use (builtin) suffix rules
-.SUFFIXES:
-# These aren't "real" build targets
-.PHONY: clean all
-# Don't remove intermediate files
-.PRECIOUS: $(obj-y) $(obj-y:.o=.d)
+	-rm -f $(OBJS)
