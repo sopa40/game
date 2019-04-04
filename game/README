@@ -1,0 +1,2 @@
+To run this game SDL2.0.9 and SDL_image 2.0.4 must be installed.  If you can run sudo apt-install check one another manual for installations
+After installation just enter with command line sdl2 folder, then $make, then $./sdl2
